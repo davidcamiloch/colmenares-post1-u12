@@ -141,7 +141,23 @@ La profundidad se aumentó insertando k pares CZ·CZ, que equivalen a la identid
 | 22 | 84.5 % | 73.2 % |
 | 102 | 51.3 % | 54.3 % |
 
-## 7. Desviaciones respecto al código guía
+## 7. Decisión técnica 1 — ¿El resultado de Grover con ruido sigue siendo útil o requiere corrección de errores?
+
+El análisis muestra que el resultado sigue siendo útil sin corrección de errores. Con p2q = 1 % el objetivo |11⟩ obtuvo 1002 de 1024 shots (97.9 %); los otros tres estados sumaron 22 shots, ninguno por encima de 0.8 %. El error estándar de la estimación es 0.45 puntos. La respuesta correcta se identifica con certeza estadística.
+
+La conclusión cambia con la profundidad. El error no se suma de forma lineal: la fracción de ejecuciones sin error se multiplica por (1 − p) en cada puerta. Las mediciones lo confirman: 98.0 % con 2 CZ; 69.7 % con 52; 51.3 % con 102; 25.8 % con 402. Con 402 puertas el resultado es indistinguible del azar (25 %). Un Grover de 20 qubits necesita ⌊π/4·√(2^20)⌋ = 804 iteraciones y cada iteración descompone puertas multicontroladas en decenas de CZ. Con 1 % de error por puerta la señal desaparece mucho antes de terminar.
+
+El estudiante decide ejecutar directamente sobre qubits físicos solo circuitos de pocos qubits con alrededor de diez puertas de 2 qubits o menos; allí el éxito medido supera 90 %. Más allá se necesitan qubits lógicos. Google Quantum AI mostró un código de superficie de distancia 7 con 0.143 % de error lógico por ciclo que se reduce 2.14 veces cada vez que la distancia crece en 2 (Acharya et al., 2024). Ese factor solo existe por debajo del umbral. La regla es corregir errores cuando el número de puertas multiplicado por la tasa de error supera 0.1.
+
+## 8. Decisión técnica 2 — ¿Qué tan representativo es el ruido despolarizante frente al hardware real?
+
+El análisis concluye que el modelo despolarizante sirve para enseñar pero no para predecir un dispositivo concreto. Trata igual a todos los qubits y a todas las puertas, aplica el error al instante y no modela la lectura. Los datos de FakeTorino muestran tres asimetrías que ignora. T1 y T2 difieren entre qubits: 224 µs frente a 266 µs y 315 µs frente a 204 µs. La CZ dura 68 ns y la sx 32 ns; la puerta de 2 qubits expone al par 2.1 veces más tiempo a la relajación. El error de lectura del qubit 0 es 16.67 %, siete veces el del qubit 1.
+
+El efecto medido no es un simple desplazamiento. Con 2 CZ el modelo uniforme predice 98.0 % y el calibrado 80.3 %: subestima el daño porque no tiene lectura. Con 102 CZ predice 51.3 % y el calibrado 54.3 %: sobrestima el daño porque supone 1 % por CZ cuando la calibración reporta 0.485 %.
+
+El estudiante decide mantener el modelo despolarizante en este laboratorio. Es reproducible, tiene un solo parámetro y aísla el fenómeno que se quiere enseñar: el ruido degrada la fidelidad de forma acumulativa. `from_backend()` ata el resultado a una calibración que cambia cada día. Para predecir una corrida en un procesador IBM específico se usaría `NoiseModel.from_backend()` con la calibración más reciente de ese backend y el transpilador elegiría los qubits con menor error de lectura. La regla es usar el modelo simple para entender y el calibrado para decidir.
+
+## 9. Desviaciones respecto al código guía
 
 | # | Código guía | Problema detectado | Corrección aplicada |
 |---|---|---|---|
@@ -153,7 +169,7 @@ La profundidad se aumentó insertando k pares CZ·CZ, que equivalen a la identid
 | 6 | Deutsch-Jozsa verifica `"00" in counts_c` | Pasaría aunque apareciera otro estado; el resultado debe ser determinista | `counts_c == {"00": shots}` y un segundo oráculo balanceado |
 | 7 | Salida esperada de `grover_noise.py`: 89.4 % | Con p1q = 0.1 % y p2q = 1 % el circuito solo tiene 2 CZ; el valor medido es 97.9 % | Se documentó la cifra real y se agregaron barridos de tasa y profundidad |
 
-## 8. Capturas
+## 10. Capturas
 
 | Checkpoint | Archivos |
 |---|---|
