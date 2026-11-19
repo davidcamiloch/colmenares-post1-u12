@@ -51,6 +51,65 @@ Tiempos de CPU relativos a Ed25519 según Westerbaan (2024); varían según la p
 
 ML-KEM reemplaza a ECDH, X25519 y al transporte de clave con RSA. ML-DSA y SLH-DSA reemplazan a ECDSA y a la firma RSA. ML-DSA es la firma de uso general: verifica más rápido que Ed25519 y firma solo 4.8 veces más lento. SLH-DSA es el respaldo conservador: no depende de ningún problema algebraico estructurado; si un avance criptoanalítico rompiera los retículos, SLH-DSA seguiría en pie. Su precio es una firma de 7 856 bytes que tarda 8 000 veces más en generarse que una de Ed25519.
 
+## 3. Plan de migración por perfil
+
+Las tres organizaciones siguen el mismo método recomendado por CISA, NSA y NIST: una hoja de ruta de preparación cuántica; un inventario criptográfico; la revisión de la cadena de suministro; el diálogo con los proveedores (CISA, NSA, & NIST, 2023). Lo que cambia es el horizonte de sensibilidad de los datos y, con él, la urgencia.
+
+### Perfil A — Hospital universitario (sensibilidad de 50 a 75 años)
+
+1. Inventario. Portal de pacientes con TLS 1.3 (X25519 + certificados ECDSA); firma ECDSA de prescripciones; respaldos cifrados de historias clínicas; VPN con sedes; integración HL7 con laboratorios.
+2. Clasificación. Historia clínica: confidencialidad de 50 a 75 años; prioridad máxima por HNDL. Prescripción firmada: autenticidad durante la vigencia legal del documento. Datos operativos: menos de 5 años.
+3. Estrategia híbrida. X25519MLKEM768 en el portal y en la VPN de inmediato; los respaldos se recifran con AES-256 y claves envueltas con ML-KEM-1024. Firma de prescripciones con ML-DSA-65 en paralelo con ECDSA hasta que los verificadores externos acepten la nueva firma.
+4. Cronograma. Hito 1 (primer trimestre de 2027): inventario completo y TLS híbrido en el portal. Hito 2 (2027): firma dual ECDSA + ML-DSA-65 en prescripciones. Hito 3 (2028): respaldos recifrados con claves envueltas por ML-KEM-1024. Hito 4 (2030): retiro de RSA y ECDSA en sistemas internos.
+5. Riesgos y mitigación. Equipos médicos con firmware antiguo que no aceptan certificados grandes: segmentarlos detrás de un proxy TLS. Interoperabilidad con farmacias: firma dual durante la transición.
+
+La prioridad del Perfil A es la confidencialidad: cada mes sin intercambio de clave post-cuántico agrega historias clínicas al archivo de un posible atacante HNDL.
+
+### Perfil B — Startup de comercio electrónico (sensibilidad de 5 a 7 años)
+
+1. Inventario. TLS 1.3 con X25519 y ECDSA en el CDN y en el origen; tokens de pago bajo PCI-DSS; API con clientes móviles; JWT firmados con ES256.
+2. Clasificación. Datos de tarjeta: 5 a 7 años; datos de sesión: horas.
+3. Estrategia híbrida. Activar X25519MLKEM768 en el CDN y en el origen; Chrome lo soporta desde la versión 116 (O'Brien, 2023). Los certificados siguen en ECDSA hasta que la Web PKI ofrezca certificados ML-DSA.
+4. Cronograma. Hito 1 (2026): TLS híbrido en CDN y origen. Hito 2 (2027): librerías móviles con soporte híbrido. Hito 3 (2028 a 2029): certificados ML-DSA cuando los acepten navegadores y autoridades. Hito 4 (2033): evaluación de PQC puro.
+5. Riesgos y mitigación. Middleboxes que fallan con ClientHello de más de un paquete: monitoreo de errores de handshake y opción de desactivar el grupo híbrido.
+
+### Perfil C — Entidad gubernamental de defensa (sensibilidad de 25 a 50 años)
+
+1. Inventario. PKI nacional; firma de documentos oficiales; VPN entre agencias; firma de software y firmware; equipos de red.
+2. Clasificación. Comunicaciones clasificadas: 25 a 50 años; firmas de firmware: vida útil del equipo.
+3. Estrategia híbrida. Algoritmos CNSA 2.0: ML-KEM-1024, ML-DSA-87, LMS o XMSS para firmware, AES-256 y SHA-384 (Elevate Consult, 2026). El modo híbrido solo durante la transición de cada categoría.
+4. Cronograma CNSA 2.0. Firma de software y firmware: preferir desde 2025 y uso exclusivo en 2030. Equipos de red y VPN: preferir desde 2026 y exclusivo en 2030. Navegadores, servidores y nube: preferir desde 2025 y exclusivo en 2033. Sistemas operativos: preferir desde 2027 y exclusivo en 2033 (Elevate Consult, 2026).
+5. Riesgos y mitigación. Ciclos de compra largos: exigir CNSA 2.0 en cada contrato nuevo. PKI nacional con raíces de larga vida: emitir raíces nuevas con ML-DSA-87 y SLH-DSA como raíz de respaldo.
+
+## 4. Tamaños de clave y firma frente a la criptografía clásica; impacto en TLS 1.3 híbrido
+
+| Algoritmo | Tipo | Clave pública (B) | Clave privada (B) | Firma o ciphertext (B) | Nivel de seguridad | Fuente |
+|---|---|---:|---:|---:|---|---|
+| RSA-3072 | Cifrado y firma clásicos | 384 (módulo) | Unos 1 700 en formato CRT | 384 (firma) | 128 bits clásicos; no post-cuántico | Calculado del tamaño de módulo |
+| ECDSA P-256 | Firma clásica | 64 (65 sin comprimir) | 32 | 64 en bruto; 70 a 72 en DER | 128 bits clásicos; no post-cuántico | Calculado del tamaño de curva |
+| X25519 | Intercambio de clave clásico | 32 | 32 | No aplica | 128 bits clásicos; no post-cuántico | Westerbaan (2024) |
+| ML-KEM-768 | KEM post-cuántico | 1 184 | 2 400 | 1 088 (ciphertext) | Categoría 3 (≈ AES-192) | NIST (2024a) |
+| ML-DSA-65 | Firma post-cuántica | 1 952 | 4 032 | 3 309 | Categoría 3 (≈ AES-192) | NIST (2024b) |
+| SLH-DSA-128s | Firma post-cuántica basada en hash | 32 | 64 | 7 856 | Categoría 1 (≈ AES-128) | NIST (2024c) |
+
+El crecimiento es grande. La clave pública de ML-KEM-768 mide 37 veces la de X25519 (1 184 frente a 32 bytes). La firma de ML-DSA-65 mide 46 veces la de ECDSA P-256 en DER (3 309 frente a 72 bytes).
+
+En el handshake híbrido X25519MLKEM768 el key_share del cliente concatena las dos claves públicas.
+
+$$32 + 1\,184 = 1\,216\ \text{bytes}$$
+
+El servidor responde con su clave X25519 y el ciphertext de ML-KEM.
+
+$$32 + 1\,088 = 1\,120\ \text{bytes}$$
+
+El ClientHello crece algo más de un kilobyte, como reporta Chrome (O'Brien, 2023). La ventana inicial de TCP admite hasta 10 segmentos; unos 14 600 bytes (Chu et al., 2013). Un ClientHello de unos 1.7 KB y un ServerHello de unos 1.2 KB caben en esa ventana; el handshake no gana rondas. El único efecto común es que el ClientHello ya no cabe en un solo paquete de 1 500 bytes y algunos middleboxes mal implementados fallan con él.
+
+La situación cambia al firmar la cadena con ML-DSA-65. Una cadena típica lleva dos claves públicas y dos firmas de certificado, más la firma del handshake.
+
+$$2 \times 3\,309 + 2 \times 1\,952 + 3\,309 = 13\,831\ \text{bytes}$$
+
+La misma estructura con ECDSA ocupa unos 346 bytes. Los 13.8 KB de autenticación, más el resto del flight del servidor y los sellos de transparencia de certificados, se acercan o superan los 14 600 bytes de la ventana inicial. En redes con pérdida de paquetes o alta latencia aparece una ronda adicional. Por eso la industria desplegó primero el intercambio de clave híbrido y dejó las firmas para después.
+
 ## Referencias
 
 Chu, J., Dukkipati, N., Cheng, Y., & Mathis, M. (2013). *Increasing TCP's initial window* (RFC 6928). RFC Editor. https://www.rfc-editor.org/rfc/rfc6928
