@@ -110,6 +110,30 @@ $$2 \times 3\,309 + 2 \times 1\,952 + 3\,309 = 13\,831\ \text{bytes}$$
 
 La misma estructura con ECDSA ocupa unos 346 bytes. Los 13.8 KB de autenticación, más el resto del flight del servidor y los sellos de transparencia de certificados, se acercan o superan los 14 600 bytes de la ventana inicial. En redes con pérdida de paquetes o alta latencia aparece una ronda adicional. Por eso la industria desplegó primero el intercambio de clave híbrido y dejó las firmas para después.
 
+## 5. Decisión técnica — ¿Qué algoritmo NIST firma las prescripciones del Perfil A?
+
+El análisis recomienda ML-DSA-65 como firma principal de las prescripciones. ML-KEM queda descartado de entrada: es un mecanismo de encapsulamiento de clave y no produce firmas (NIST, 2024a). La elección real está entre ML-DSA-65 y SLH-DSA-128s.
+
+El volumen decide. Un hospital emite miles de prescripciones por día y el portal exige baja latencia. ML-DSA-65 firma con 3 309 bytes; SLH-DSA-128s con 7 856 bytes, 2.4 veces más. En tiempo de CPU la diferencia es mayor: con los datos de Westerbaan (2024), SLH-DSA-128s firma unas 1 700 veces más lento que ML-DSA-44 (8 000 frente a 4.8) y verifica 5.6 veces más lento (2.8 frente a 0.5).
+
+El horizonte de 50 a 75 años no obliga a usar el esquema más conservador. La amenaza HNDL afecta la confidencialidad: un dato cifrado hoy puede leerse mañana. Una firma autentica quién emitió la prescripción y cuándo. Si algún día ML-DSA se debilita, el hospital vuelve a firmar o sella con marca de tiempo los documentos que deban seguir vigentes; nada del pasado queda expuesto.
+
+El estudiante decide ML-DSA-65 para las prescripciones y SLH-DSA para la raíz de la PKI del hospital y los certificados de larga vida. Allí se firma poco y la diversidad criptográfica protege contra una falla de los retículos. La regla es usar la firma rápida para el volumen y la conservadora para la raíz.
+
+## 6. Decisión técnica — ¿Modo híbrido permanente o etapa de transición para el Perfil B?
+
+El análisis concluye que el Perfil B debe adoptar X25519MLKEM768 desde ahora y tratarlo como etapa de transición. El costo es bajo: 1 184 bytes más en el ClientHello y 1 088 en la respuesta, dentro de la ventana inicial de 14 600 bytes; el handshake no agrega rondas en el caso común. Chrome lo soporta desde la versión 116 (O'Brien, 2023). Activarlo en el CDN es un cambio de configuración, no un proyecto.
+
+El beneficio es doble y los dos riesgos que cubre no están correlacionados. Si una computadora cuántica rompe X25519, ML-KEM protege la sesión. Si ML-KEM resulta tener una debilidad clásica, X25519 sigue protegiendo; Cloudflare cita el ataque de tiempo KyberSlash como ejemplo de esa clase de riesgo de implementación (Westerbaan, 2024). Varios candidatos post-cuánticos se rompieron en 2022 y 2023 con hardware barato (O'Brien, 2023). ML-KEM tiene pocos años de escrutinio frente a las décadas de las curvas elípticas.
+
+El híbrido no debe ser permanente. Duplica código, superficie de ataque y bytes. Con datos de 5 a 7 años de sensibilidad, el Perfil B no tiene la urgencia del Perfil C. El estudiante decide mantener el híbrido hasta que ML-KEM acumule confianza y migrar a ML-KEM puro alrededor de 2033, la fecha que CNSA 2.0 fija para navegadores, servidores y nube (Elevate Consult, 2026). La regla es entrar temprano con el híbrido y salir tarde de él.
+
+## Conclusiones
+
+La computación cuántica no amenaza por igual a toda la criptografía. Shor elimina RSA, Diffie-Hellman y las curvas elípticas; Grover solo recorta el margen de AES y de SHA-2. La migración empieza por el intercambio de clave porque el ataque HNDL ya está en curso. Las firmas pueden esperar un poco más porque su riesgo empieza el día en que exista la máquina.
+
+Los estándares NIST cubren las dos necesidades: ML-KEM para establecer claves; ML-DSA y SLH-DSA para firmar. El costo de la migración se mide en bytes: un kilobyte por handshake con ML-KEM y más de 13 KB por cadena de certificados con ML-DSA. El primero ya es invisible para el usuario; el segundo todavía exige ingeniería.
+
 ## Referencias
 
 Chu, J., Dukkipati, N., Cheng, Y., & Mathis, M. (2013). *Increasing TCP's initial window* (RFC 6928). RFC Editor. https://www.rfc-editor.org/rfc/rfc6928
